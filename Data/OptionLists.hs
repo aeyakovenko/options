@@ -1,5 +1,5 @@
 {-# LANGUAGE DeriveGeneric #-}
-module Data.YFO where
+module Data.OptionLists where
 
 import GHC.Generics
 import qualified Data.Aeson as A
