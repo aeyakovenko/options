@@ -9,6 +9,9 @@ import qualified Data.Time.Clock as C
 import qualified Data.Time.Clock.POSIX as P
 import qualified Data.Time.Calendar as D
 
+import Network.HTTP.Client as H
+import Network.HTTP.Types.Status as H
+
 import Data.Char(toUpper)
 
 -- URL = https://query2.finance.yahoo.com/v7/finance/options/SPY?date=1516320000
@@ -17,6 +20,13 @@ query :: String -> D.Day -> String
 query s e = concat ["https://query2.finance.yahoo.com/v7/finance/options/", u, "?date=", t]
     where t = dayToPosixTime e
           u = map toUpper s
+
+get :: String -> IO L.ByteString
+get q = do
+  manager <- newManager defaultManagerSettings
+  request <- parseRequest q
+  response <- httpLbs request manager
+  return $ responseBody response
 
 dayToPosixTime :: D.Day -> Integer
 dayToPosixTime = t
@@ -32,13 +42,11 @@ parse = from . A.eitherDecode
     where from (Left err) = error err
           from (Right v) = v
 
-data OptionPrice = Call { date :: Integer
-                        , expiration :: Integer
+data OptionPrice = Call { expiration :: Integer
                         , strike :: Double
                         , price :: Double
                         }
-                 | Put { date :: Integer
-                       , expiration :: Integer
+                 | Put { expiration :: Integer
                        , strike :: Double
                        , price :: Double
                        }
@@ -57,17 +65,12 @@ fromOptionLists (Y.OptionLists { Y.calls = cs, Y.puts = ps }) =
         map (fromOption Call) cs
      ++ map (fromOption Put) ps
 
-fromOption :: (Integer -> Integer -> Double -> Double -> OptionPrice) -> Y.Option -> OptionPrice
-fromOption v o = v d e s p
-    where d = Y.lastTradeDate o
-          e = Y.expiration $ o
+fromOption :: (Integer -> Double -> Double -> OptionPrice) -> Y.Option -> OptionPrice
+fromOption v o = v e s p
+    where e = Y.expiration $ o
           s = Y.strike o 
-          p = Y.lastPrice o 
+          p = (Y.bid o + Y.ask o)/2
 
-line :: Fractional a => (a, a) -> (a, a) -> a -> a
-line (x1,y1) (x2,y2) x3 = s * x3 + c
-    where s = (y2 - y1)/(x2 - x1)
-          c = y1 - s * x1
 
 main :: IO ()
 main = do
