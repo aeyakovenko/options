@@ -45,41 +45,46 @@ trade = do
     sellPuts
     buyPuts
 
-valuePut pt os = fromMaybe 0 $ value pt
-    where value (h,l,v) = (* v) `ap` (-) `ap` lookup os (toix h) `ap` lookup os (toix l)
-          toix q = (expiration q,strike q)
+sellValue os (h,l,v)= fromMaybe 0 $ do 
+    hp <- bid <$> lookup os (toix h)
+    lp <- ask <$> lookup os (toix l)
+    return $ v * (hp - lp)
+
+toix q = (expiration q,strike q)
 
 maxValue (h,l,v) = (strike h) - (strike l) * v
 
-sellPuts ac os =
+sellPuts ac os = ac { cash = nc, puts = keep }
     where needsClose (q,_,_) | (expiration q) - d < 7 = True
-          needsClose pt | valuePut pt / maxValue pt > (sellThreshold $ alg $ acc) = True
-          needsClose pt | valuePut pt == 0 = True
+          needsClose pt | sellValue os pt / maxValue pt > (sellThreshold $ alg $ acc) = True
+          needsClose pt | sellValue os pt == 0 = True
           needsClose _ = False
           (close,keep) = partition needsClose (puts ac)
           (lb,hb) = bounds os
           d = date $ os ! lb
+          nc = cash ac + (sum $ map (sellValue os) close)
 
 lookup os ix = lookup' ix
     where (lo,hi) = bounds os
           lookup' ix | ix < o || ix > hi = Nothing
           lookup' ix | otherwise =  Just $ os ! ix
 
-buyPuts ac os = ac { cash = nc, puts = np }
-    where c = cash ac
-          p = unadjustedStockPrice (head qs)
-          (lb,hb) = bounds os
-          (hi, low) = spread ac
-          hp = (ciel $ hi * p/5) * 5
-          lp = (floor $ low * p/5) * 5
-          d = expired ac + (date $ os ! lb)
-          hq = lookup (d,hp)
-          lq = lookup (d,lp)
-          d = (ask hq - bid lq)
-          s = investRatio ac * c
-          v = floor $ s / d
-          nc = c - v * d 
-          np = (hq, lq, v) : puts ac
+buyPuts ac os = fromMaybe ac $ do
+    hq <- lookup (d,hp)
+    lq <- lookup (d,lp)
+    let c = cash ac
+        p = unadjustedStockPrice (head qs)
+        (lb,hb) = bounds os
+        (hi, low) = spread ac
+        hp = (ciel $ hi * p/5) * 5
+        lp = (floor $ low * p/5) * 5
+        d = expired ac + (date $ os ! lb)
+        bp = (ask hq - bid lq)
+        s = investRatio ac * c
+        v = floor $ s / bp
+        nc = c - v * bp
+        np = (hq, lq, v) : puts ac
+    return $ ac { cash = nc, puts = np }
 
 findPut :: [Quotes]
 
