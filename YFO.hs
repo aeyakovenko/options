@@ -41,9 +41,7 @@ data Account = Account { cash :: Double
                        }
 maxPrice = 2**32
 
-trade = do
-    sellPuts
-    buyPuts
+trade ac os = buyPuts os $ sellPuts os ac
 
 sellValue os (h,l,v)= fromMaybe 0 $ do 
     hp <- bid <$> lookup os (toix h)
@@ -54,7 +52,7 @@ toix q = (expiration q,strike q)
 
 maxValue (h,l,v) = (strike h) - (strike l) * v
 
-sellPuts ac os = ac { cash = nc, puts = keep }
+sellPuts os ac = ac { cash = nc, puts = keep }
     where needsClose (q,_,_) | (expiration q) - d < 7 = True
           needsClose pt | sellValue os pt / maxValue pt > (sellThreshold $ alg $ acc) = True
           needsClose pt | sellValue os pt == 0 = True
@@ -69,7 +67,7 @@ lookup os ix = lookup' ix
           lookup' ix | ix < o || ix > hi = Nothing
           lookup' ix | otherwise =  Just $ os ! ix
 
-buyPuts ac os = fromMaybe ac $ do
+buyPuts os ac = fromMaybe ac $ do
     hq <- lookup (d,hp)
     lq <- lookup (d,lp)
     let c = cash ac
@@ -85,8 +83,6 @@ buyPuts ac os = fromMaybe ac $ do
         nc = c - v * bp
         np = (hq, lq, v) : puts ac
     return $ ac { cash = nc, puts = np }
-
-findPut :: [Quotes]
 
 parse ln = Quote sy ex (toDay da) (read as) os (toDay exp) (read st) (toType cp) (toStyle sy) (read as) (read bi) (read vo) (read oi) (read us)
     where [sy,ex,da,as,os,exp,st,cp,sy,as,bi,vo,oi,us] = splitOn "," ln
