@@ -4,6 +4,7 @@ import Data.List(foldl')
 import Data.List.Split(splitOn)
 import Data.Time.Calendar(Day, fromGregorian)
 import Data.Maybe(fromMaybe)
+import Data.Function(on)
 
 -- symbol,exchange,date,adjusted stock close price,option symbol,expiration,strike,call/put,style,ask,bid,volume,open interest,unadjusted stock price
 -- SPY,NYSEArca,01/07/05,118.44,SYHXD,12/17/05,160,P,A,0,0,0,0,118.44
@@ -41,14 +42,19 @@ data Account = Account { cash :: Double
                        }
 maxPrice = 2**32
 
-trade ac os = buyPuts os $ sellPuts os ac
+trade ::  Account -> [Quote] -> Account
+trade ac qs = buyPuts os $ sellPuts os ac
+    where os = listArray (l,h) ls
+          ls = map (\ q -> (toix q, q)) qs
+          l = fst $ head ls
+          h = fst $ last ls
 
 sellValue os (h,l,v)= fromMaybe 0 $ do 
     hp <- bid <$> lookup os (toix h)
     lp <- ask <$> lookup os (toix l)
     return $ v * (hp - lp)
 
-toix q = (expiration q,strike q)
+toix q = (expiration q, strike q)
 
 maxValue (h,l,v) = (strike h) - (strike l) * v
 
@@ -96,5 +102,6 @@ toDay str = fromGregorian (read yy + 2000) (read mm) (read dd)
 
 main :: IO ()
 main = do
-    quotes <- map parse <$> tail <$> L.lines <$> L.readFile "spy_options.1.7.2005.to.12.28.2009.r.csv"
+    let grup = groupBy ((==) `on` expiration)
+    quotes <- grup <$> map parse <$> tail <$> L.lines <$> L.readFile "spy_options.1.7.2005.to.12.28.2009.r.csv"
     foldl' trade account quotes 
