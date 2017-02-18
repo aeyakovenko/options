@@ -1,12 +1,11 @@
-Name:                yfo
+Name:                options
 Version:             0.0
 Author:              anatoly yakovenko
 Build-Type:          Simple
 Cabal-Version:       >=1.2
 
-Executable yfo
-  Main-is:           YFO.hs
-  ghc-options:       -Wall -Werror -rtsopts -threaded -main-is YFO.main
+Executable options
+  Main-is:           Options.hs
+  ghc-options:       -Wall -Werror -rtsopts -threaded -main-is Options.main
   Build-Depends:     base, 
-                     aeson,
                      bytestring
