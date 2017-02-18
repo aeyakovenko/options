@@ -8,4 +8,7 @@ Executable options
   Main-is:           Options.hs
   ghc-options:       -Wall -Werror -rtsopts -threaded -main-is Options.main
   Build-Depends:     base, 
+                     split,
+                     time,
+                     array,
                      bytestring
