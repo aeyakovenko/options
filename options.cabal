@@ -3,10 +3,10 @@ Version:             0.0
 Author:              anatoly yakovenko
 Build-Type:          Simple
 Cabal-Version:       >=1.2
-
+-- -Werror 
 Executable options
   Main-is:           Options.hs
-  ghc-options:       -Wall -Werror -rtsopts -threaded -main-is Options.main
+  ghc-options:       -Wall -rtsopts -threaded -main-is Options.main 
   Build-Depends:     base, 
                      split,
                      time,

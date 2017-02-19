@@ -7,7 +7,8 @@ import Data.Maybe(fromMaybe, fromJust)
 import Data.Function(on)
 import Data.Array(Array, bounds, (!))
 import Data.Array.ST.Safe(runSTArray)
-import Data.Array.MArray(writeArray, newArray)
+import Data.Array.MArray(writeArray, newArray, getBounds)
+import Debug.Trace(traceShowId)
 
 -- symbol,exchange,date,adjusted stock close price,option symbol,expiration,strike,call/put,style,ask,bid,volume,open interest,unadjusted stock price
 -- SPY,NYSEArca,01/07/05,118.44,SYHXD,12/17/05,160,P,A,0,0,0,0,118.44
@@ -52,7 +53,10 @@ maxPrice = 2**32
 trade ::  Account -> [Quote] -> Account
 trade ac qs = buyPuts os $ sellPuts os ac
     where os = mkArray ls
-          ls = map (\ q -> (toix q, q)) qs
+          ls = map (\ q -> (toix q, q)) ps
+          ps = reverse $ filter isPut qs
+          isPut (Quote { callOrPut = Put }) = True
+          isPut _ = False
 
 mkArray :: [((Day,StrikePrice),Quote)] -> Options
 mkArray ls = runSTArray $ do
