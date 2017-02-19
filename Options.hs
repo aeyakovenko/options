@@ -162,6 +162,6 @@ main :: IO ()
 main = do
     let grup = groupBy ((==) `on` date)
     quotes <- grup <$> concatMap parse <$> tail <$> C.lines <$> C.readFile "spy_options.1.7.2005.to.12.28.2009.r.csv"
-    let al = Alg (0.85, 0.8) 300 0.01 0.9
+    let al = Alg (0.85, 0.8) 300 0.001 0.9
     let ac = Account  100000 [] al 0
     print $ foldl' trade ac  quotes 
