@@ -1,9 +1,8 @@
+{-# LANGUAGE OverloadedStrings #-}
 module Options where
-import qualified Data.ByteString.Lazy as L
-import qualified Data.ByteString.Char8 as C
+import qualified Data.ByteString.Lazy.Char8 as C
 import Data.List(foldl', partition, groupBy)
-import Data.List.Split(splitOn)
-import Data.Time.Calendar(Day, fromGregorian)
+import Data.Time.Calendar(Day, fromGregorian, addDays)
 import Data.Maybe(fromMaybe)
 import Data.Function(on)
 import Data.Array(listArray, Array, bounds, (!))
@@ -15,11 +14,11 @@ data Type = Call | Put
 
 data Style = American
 type StrikePrice = Int
-data Quote = Quote { symbol :: String
-                   , exchange :: String
+data Quote = Quote { symbol :: C.ByteString
+                   , exchange :: C.ByteString
                    , date :: Day
                    , adjustedPrice :: Double
-                   , optionSymbol :: String
+                   , optionSymbol :: C.ByteString
                    , expiration :: Day
                    , strike :: StrikePrice
                    , callOrPut :: Type
@@ -75,6 +74,7 @@ lookupO os ix = lookup' ix
           lookup' ix | ix < lo || ix > hi = Nothing
           lookup' ix | otherwise =  Just $ os ! ix
 
+buyPuts :: Array (Day,Int) Quote -> Account -> Account
 buyPuts os ac = fromMaybe ac $ do
     hq <- lookup (d,hp)
     lq <- lookup (d,lp)
@@ -87,27 +87,31 @@ buyPuts os ac = fromMaybe ac $ do
     where c = cash ac
           p = unadjustedStockPrice (os ! lb)
           (lb,hb) = bounds os
-          (hi, low) = spread ac
+          (hi, low) = spread $ alg ac
           hp = (ceiling $ hi * p/5) * 5
           lp = (floor $ low * p/5) * 5
-          d = expired ac + (date $ os ! lb)
+          e = fromIntegral $ expired $ alg ac
+          d = addDays e (date $ os ! lb)
 
-parse :: String -> [Quote]
-parse ('#':_) = []
-parse ln = [Quote sm ex (toDay da) (read ap) os (toDay exp) (read st) (toType cp) (toStyle sy) (read as) (read bi) (read vo) (read oi) (read us)]
-    where [sm,ex,da,ap,os,exp,st,cp,sy,as,bi,vo,oi,us] = splitOn "," ln
+parse :: C.ByteString -> [Quote]
+parse ln | C.head ln == '#' = []
+parse ln = [Quote sm ex (toDay da) (readC ap) os (toDay exp) (readC st) (toType cp) (toStyle sy) (readC as) (readC bi) (readC vo) (readC oi) (readC us)]
+    where [sm,ex,da,ap,os,exp,st,cp,sy,as,bi,vo,oi,us] = C.split ',' ln
           toType "C" = Call 
           toType "P" = Put 
+          toStyle :: C.ByteString -> Style
           toStyle "A" = American
 
-toDay :: String -> Day
-toDay str = fromGregorian (read yy + 2000) (read mm) (read dd) 
-    where [mm,dd,yy] = splitOn "/" str
+readC s = read $ C.unpack s
+
+toDay :: C.ByteString -> Day
+toDay str = fromGregorian (readC yy + 2000) (readC mm) (readC dd) 
+    where [mm,dd,yy] = C.split '/' str
 
 main :: IO ()
 main = do
     let grup = groupBy ((==) `on` expiration)
-    quotes <- grup <$> concatMap parse <$> tail <$> C.lines <$> L.readFile "spy_options.1.7.2005.to.12.28.2009.r.csv"
+    quotes <- grup <$> concatMap parse <$> tail <$> C.lines <$> C.readFile "spy_options.1.7.2005.to.12.28.2009.r.csv"
     let alg = Alg (0.85, 0.8) 10000 0.1 0.8
     let ac = Account  10000 [] alg
-    foldl' trade ac  quotes 
+    print $ foldl' trade ac  quotes 
