@@ -62,18 +62,19 @@ trade ac qs = updateValuation os $ buyPuts q os $ sellPuts q os ac
     where os = mkArray ls
           q = head qs
           ls = map (\ q -> (toix q, q)) ps
-          ps = reverse $ filter isPut qs
+          ps = filter isPut qs
           isPut (Quote { callOrPut = Put }) = True
           isPut _ = False
 
 mkArray :: [((Day,StrikePrice),Quote)] -> Options
 mkArray ls = runSTArray $ do
-    let l = fst $ fst $ head ls
-        h = fst $ fst $ last ls
-        ps = snd $ unzip $ fst $ unzip ls
+    let a = fst $ fst $ head ls
+        b = fst $ fst $ last ls
+        ld = a `min` b
+        hd = a `max` b
         lp = 0
         hp = 300
-    ar <- newArray ((l,lp),(h,hp)) Nothing
+    ar <- newArray ((ld,lp),(hd,hp)) Nothing
     mapM_ (\ (ix,v) -> writeArray ar ix (Just v)) ls
     return ar
 
@@ -161,6 +162,6 @@ main :: IO ()
 main = do
     let grup = groupBy ((==) `on` date)
     quotes <- grup <$> concatMap parse <$> tail <$> C.lines <$> C.readFile "spy_options.1.7.2005.to.12.28.2009.r.csv"
-    let al = Alg (0.85, 0.8) 150 0.01 0.8
+    let al = Alg (0.85, 0.8) 150 0.01 0.9
     let ac = Account  100000 [] al 0
     print $ foldl' trade ac  quotes 
