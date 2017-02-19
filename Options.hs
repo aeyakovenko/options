@@ -54,9 +54,6 @@ data Account = Account { cash :: Double
                        }
              deriving Show
 
-maxPrice :: Double
-maxPrice = 2**32
-
 trade ::  Account -> [Quote] -> Account
 trade ac qs = updateValuation os $ buyPuts q os $ sellPuts q os ac
     where os = mkArray ls
