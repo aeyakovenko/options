@@ -1,5 +1,6 @@
 module Options where
 import qualified Data.ByteString.Lazy as L
+import qualified Data.ByteString.Char8 as C
 import Data.List(foldl', partition, groupBy)
 import Data.List.Split(splitOn)
 import Data.Time.Calendar(Day, fromGregorian)
@@ -106,7 +107,7 @@ toDay str = fromGregorian (read yy + 2000) (read mm) (read dd)
 main :: IO ()
 main = do
     let grup = groupBy ((==) `on` expiration)
-    quotes <- grup <$> concatMap parse <$> tail <$> L.lines <$> L.readFile "spy_options.1.7.2005.to.12.28.2009.r.csv"
+    quotes <- grup <$> concatMap parse <$> tail <$> C.lines <$> L.readFile "spy_options.1.7.2005.to.12.28.2009.r.csv"
     let alg = Alg (0.85, 0.8) 10000 0.1 0.8
     let ac = Account  10000 [] alg
     foldl' trade ac  quotes 
