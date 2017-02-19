@@ -91,7 +91,7 @@ maxValue (h,l,v) = fromIntegral $ strike h - strike l * v
 
 sellPuts :: Quote -> Options -> Account -> Account
 sellPuts q os ac = ac { cash = nc, puts = keep }
-    where needsClose (qo,_,_) | diffDays (expiration qo) d < 7 = True
+    where needsClose (qo,_,_) | diffDays (expiration qo) d < 14 = True
           needsClose pt | sellValue os pt / maxValue pt > (sellThreshold al) = True
           needsClose pt | sellValue os pt <= 0 = True
           needsClose _ = False
@@ -161,6 +161,6 @@ main :: IO ()
 main = do
     let grup = groupBy ((==) `on` date)
     quotes <- grup <$> concatMap parse <$> tail <$> C.lines <$> C.readFile "spy_options.1.7.2005.to.12.28.2009.r.csv"
-    let al = Alg (0.95, 0.9) 100 0.1 0.8
-    let ac = Account  10000 [] al 0
+    let al = Alg (0.85, 0.8) 150 0.01 0.8
+    let ac = Account  100000 [] al 0
     print $ foldl' trade ac  quotes 
