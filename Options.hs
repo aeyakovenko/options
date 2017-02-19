@@ -12,12 +12,15 @@ import Debug.Trace(traceShowId)
 
 -- symbol,exchange,date,adjusted stock close price,option symbol,expiration,strike,call/put,style,ask,bid,volume,open interest,unadjusted stock price
 -- SPY,NYSEArca,01/07/05,118.44,SYHXD,12/17/05,160,P,A,0,0,0,0,118.44
-data Type = Call | Put
+data Type = Call
+          | Put
           deriving (Show, Enum)
 
 data Style = American
            deriving Show
+
 type StrikePrice = Int
+
 data Quote = Quote { symbol :: C.ByteString
                    , exchange :: C.ByteString
                    , date :: Day
@@ -41,10 +44,13 @@ data Alg = Alg { spread :: (Double, Double)
                , sellThreshold :: Double
                }
          deriving Show
+
 type Options = Array (Day,StrikePrice) (Maybe Quote)
+
 data Account = Account { cash :: Double
                        , puts :: [(Quote, Quote, Int)]
                        , alg :: Alg
+                       , valuation :: Double
                        }
              deriving Show
 
@@ -52,7 +58,7 @@ maxPrice :: Double
 maxPrice = 2**32
 
 trade ::  Account -> [Quote] -> Account
-trade ac qs = buyPuts q os $ sellPuts q os ac
+trade ac qs = updateValuation os $ buyPuts q os $ sellPuts q os ac
     where os = mkArray ls
           q = head qs
           ls = map (\ q -> (toix q, q)) ps
@@ -72,7 +78,7 @@ mkArray ls = runSTArray $ do
     return ar
 
 sellValue :: Options -> (Quote,Quote,Int) -> Double
-sellValue os (h,l,v)= fromMaybe 0 $ do 
+sellValue os (h,l,v)= traceShowId $ fromMaybe 0 $ do 
     hp <- bid <$> lookupO os (toix h)
     lp <- ask <$> lookupO os (toix l)
     return $ fromIntegral v * (hp - lp)
@@ -87,7 +93,7 @@ sellPuts :: Quote -> Options -> Account -> Account
 sellPuts q os ac = ac { cash = nc, puts = keep }
     where needsClose (qo,_,_) | diffDays (expiration qo) d < 7 = True
           needsClose pt | sellValue os pt / maxValue pt > (sellThreshold al) = True
-          needsClose pt | sellValue os pt == 0 = True
+          needsClose pt | sellValue os pt <= 0 = True
           needsClose _ = False
           (close,keep) = partition needsClose (puts ac)
           al = alg ac
@@ -100,14 +106,20 @@ lookupO os ix = lookup' ix
           lookup' i | i < lo || i > hi = Nothing
           lookup' i | otherwise =  os ! i
 
+updateValuation :: Options -> Account -> Account
+updateValuation os ac = ac { valuation = c + v }
+    where v = sum $ map (sellValue os) (puts ac)
+          c = cash ac
+
 buyPuts :: Quote -> Options -> Account -> Account
+buyPuts q os ac | (cash ac) <= 0 = ac
 buyPuts q os ac = fromMaybe ac $ do
     d <- findDay os st (hp,lp)
     hq <- lookupO os (d,hp)
     lq <- lookupO os (d,lp)
     let bp = (ask hq - bid lq)
         s = investRatio al * c
-        v = floor $ s / bp
+        v = (floor $ s / bp) `max` 0
         nc = c - fromIntegral v * bp
         np = (hq, lq, v) : puts ac
     return $ ac { cash = nc, puts = np }
@@ -150,5 +162,5 @@ main = do
     let grup = groupBy ((==) `on` date)
     quotes <- grup <$> concatMap parse <$> tail <$> C.lines <$> C.readFile "spy_options.1.7.2005.to.12.28.2009.r.csv"
     let al = Alg (0.95, 0.9) 100 0.1 0.8
-    let ac = Account  10000 [] al
+    let ac = Account  10000 [] al 0
     print $ foldl' trade ac  quotes 
