@@ -59,6 +59,7 @@ toix q = (expiration q, strike q)
 
 maxValue (h,l,v) = (strike h) - (strike l) * v
 
+sellPuts :: Options -> Account -> Account
 sellPuts os ac = ac { cash = nc, puts = keep }
     where needsClose (q,_,_) | (expiration q) - d < 7 = True
           needsClose pt | sellValue os pt / maxValue pt > (sellThreshold $ alg $ ac) = True
@@ -74,7 +75,7 @@ lookupO os ix = lookup' ix
           lookup' ix | ix < lo || ix > hi = Nothing
           lookup' ix | otherwise =  Just $ os ! ix
 
-buyPuts :: Array (Day,Int) Quote -> Account -> Account
+buyPuts :: Options -> Account -> Account
 buyPuts os ac = fromMaybe ac $ do
     hq <- lookup (d,hp)
     lq <- lookup (d,lp)
