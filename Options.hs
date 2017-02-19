@@ -3,7 +3,7 @@ module Options where
 import qualified Data.ByteString.Lazy.Char8 as C
 import Data.List(foldl', partition, groupBy)
 import Data.Time.Calendar(Day, fromGregorian, addDays, diffDays)
-import Data.Maybe(fromMaybe, fromJust)
+import Data.Maybe(fromMaybe, fromJust, isJust)
 import Data.Function(on)
 import Data.Array(Array, bounds, (!))
 import Data.Array.ST.Safe(runSTArray)
@@ -47,12 +47,14 @@ data Account = Account { cash :: Double
                        , alg :: Alg
                        }
              deriving Show
+
 maxPrice :: Double
 maxPrice = 2**32
 
 trade ::  Account -> [Quote] -> Account
-trade ac qs = buyPuts os $ sellPuts os ac
+trade ac qs = buyPuts q os $ sellPuts q os ac
     where os = mkArray ls
+          q = head qs
           ls = map (\ q -> (toix q, q)) ps
           ps = reverse $ filter isPut qs
           isPut (Quote { callOrPut = Put }) = True
@@ -60,9 +62,12 @@ trade ac qs = buyPuts os $ sellPuts os ac
 
 mkArray :: [((Day,StrikePrice),Quote)] -> Options
 mkArray ls = runSTArray $ do
-    let l = fst $ head ls
-        h = fst $ last ls
-    ar <- newArray (l,h) Nothing
+    let l = fst $ fst $ head ls
+        h = fst $ fst $ last ls
+        ps = snd $ unzip $ fst $ unzip ls
+        lp = 0
+        hp = 300
+    ar <- newArray ((l,lp),(h,hp)) Nothing
     mapM_ (\ (ix,v) -> writeArray ar ix (Just v)) ls
     return ar
 
@@ -78,16 +83,15 @@ toix q = (expiration q, strike q)
 maxValue :: (Quote,Quote,Int) -> Double
 maxValue (h,l,v) = fromIntegral $ strike h - strike l * v
 
-sellPuts :: Options -> Account -> Account
-sellPuts os ac = ac { cash = nc, puts = keep }
-    where needsClose (q,_,_) | diffDays (expiration q) d < 7 = True
+sellPuts :: Quote -> Options -> Account -> Account
+sellPuts q os ac = ac { cash = nc, puts = keep }
+    where needsClose (qo,_,_) | diffDays (expiration qo) d < 7 = True
           needsClose pt | sellValue os pt / maxValue pt > (sellThreshold al) = True
           needsClose pt | sellValue os pt == 0 = True
           needsClose _ = False
           (close,keep) = partition needsClose (puts ac)
-          (lb,_) = bounds os
           al = alg ac
-          d = date $ fromJust $ os ! lb
+          d = date q
           nc = cash ac + (sum $ map (sellValue os) close)
 
 lookupO :: Options -> (Day,StrikePrice) -> Maybe Quote
@@ -96,8 +100,9 @@ lookupO os ix = lookup' ix
           lookup' i | i < lo || i > hi = Nothing
           lookup' i | otherwise =  os ! i
 
-buyPuts :: Options -> Account -> Account
-buyPuts os ac = fromMaybe ac $ do
+buyPuts :: Quote -> Options -> Account -> Account
+buyPuts q os ac = fromMaybe ac $ do
+    d <- findDay os st (hp,lp)
     hq <- lookupO os (d,hp)
     lq <- lookupO os (d,lp)
     let bp = (ask hq - bid lq)
@@ -107,14 +112,20 @@ buyPuts os ac = fromMaybe ac $ do
         np = (hq, lq, v) : puts ac
     return $ ac { cash = nc, puts = np }
     where c = cash ac
-          p = unadjustedStockPrice (fromJust $ os ! lb)
-          (lb,_) = bounds os
+          p = unadjustedStockPrice q
           (hi, low) = spread $ alg ac
           hp = (ceiling $ hi * p/5) * 5
           lp = (floor $ low * p/5) * 5
           al = alg ac
           e = fromIntegral $ expired al
-          d = addDays e (date $ fromJust $ os ! lb)
+          cd = date q
+          st = addDays e cd
+
+findDay :: Options -> Day -> (Int,Int) -> Maybe Day
+findDay ar st (hp,lp) | (snd $ bounds ar) < (st,hp) = Nothing
+                      | (fst $ bounds ar) > (st,lp) = Nothing
+                      | isJust (ar ! (st, hp)) && isJust (ar ! (st, lp)) = Just st
+                      | otherwise = findDay ar (addDays 1 st) (hp,lp)
 
 parse :: C.ByteString -> [Quote]
 parse ln | C.head ln == '#' = []
@@ -136,8 +147,8 @@ toDay str = fromGregorian (readC yy + 2000) (readC mm) (readC dd)
 
 main :: IO ()
 main = do
-    let grup = groupBy ((==) `on` expiration)
+    let grup = groupBy ((==) `on` date)
     quotes <- grup <$> concatMap parse <$> tail <$> C.lines <$> C.readFile "spy_options.1.7.2005.to.12.28.2009.r.csv"
-    let al = Alg (0.85, 0.8) 10000 0.1 0.8
+    let al = Alg (0.95, 0.9) 100 0.1 0.8
     let ac = Account  10000 [] al
     print $ foldl' trade ac  quotes 
