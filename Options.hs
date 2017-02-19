@@ -85,7 +85,7 @@ toix :: Quote -> (Day, StrikePrice)
 toix q = (expiration q, strike q)
 
 maxValue :: (Quote,Quote,Int) -> Double
-maxValue (h,l,v) = fromIntegral $ strike h - strike l * v
+maxValue (h,l,v) = fromIntegral $ (strike h - strike l) * v
 
 sellPuts :: Quote -> Options -> Account -> Account
 sellPuts q os ac = ac { cash = nc, puts = keep }
@@ -159,6 +159,6 @@ main :: IO ()
 main = do
     let grup = groupBy ((==) `on` date)
     quotes <- grup <$> concatMap parse <$> tail <$> C.lines <$> C.readFile "spy_options.1.7.2005.to.12.28.2009.r.csv"
-    let al = Alg (0.85, 0.8) 300 0.001 0.45
+    let al = Alg (0.85, 0.8) 300 0.001 0.55
     let ac = Account  100000 [] al 0
     print $ foldl' trade ac  quotes 
